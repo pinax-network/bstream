@@ -15,11 +15,14 @@
 package bstream
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/streamingfast/dtracing"
 	"github.com/streamingfast/shutter"
 	"go.uber.org/zap"
 	"sync"
+	"time"
 )
 
 var stopSourceOnJoin = errors.New("stopping source on join")
