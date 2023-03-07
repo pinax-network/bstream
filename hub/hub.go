@@ -90,6 +90,18 @@ func (h *ForkableHub) LowestBlockNum() uint64 {
 	return 0
 }
 
+func (h *ForkableHub) GetBlock(num uint64, id string) (out *bstream.Block) {
+	if id == "" {
+		return h.forkable.CanonicalBlockAt(num)
+	}
+	for _, blk := range h.forkable.AllBlocksAt(num) {
+		if id == blk.Id {
+			return blk
+		}
+	}
+	return nil
+}
+
 func (h *ForkableHub) HeadInfo() (headNum uint64, headID string, headTime time.Time, libNum uint64, err error) {
 	if h != nil && h.ready {
 		return h.forkable.HeadInfo()
@@ -183,6 +195,26 @@ func (h *ForkableHub) SourceFromCursor(cursor *bstream.Cursor, handler bstream.H
 	}
 
 	err := h.forkable.CallWithBlocksFromCursor(cursor, func(blocks []*bstream.PreprocessedBlock) { // Running callback func while forkable is locked
+		out = h.subscribe(handler, blocks)
+	})
+	if err != nil {
+		zlog.Debug("error getting source_from_cursor", zap.Error(err))
+		return nil
+	}
+	return
+}
+
+func (h *ForkableHub) SourceThroughCursor(startBlock uint64, cursor *bstream.Cursor, handler bstream.Handler) (out bstream.Source) {
+	if h == nil {
+		return nil
+	}
+
+	// cursor has already passed, ignoring it
+	if cursor.Block.Num() < startBlock {
+		return h.SourceFromBlockNum(startBlock, handler)
+	}
+
+	err := h.forkable.CallWithBlocksThroughCursor(startBlock, cursor, func(blocks []*bstream.PreprocessedBlock) { // Running callback func while forkable is locked
 		out = h.subscribe(handler, blocks)
 	})
 	if err != nil {

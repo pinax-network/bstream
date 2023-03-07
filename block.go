@@ -1,6 +1,8 @@
 package bstream
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -196,14 +198,6 @@ func (b *Block) AsRef() BlockRef {
 	return NewBlockRef(b.Id, b.Number)
 }
 
-func (b *Block) PreviousRef() BlockRef {
-	if b == nil || b.Number == 0 || b.PreviousId == "" {
-		return BlockRefEmpty
-	}
-
-	return NewBlockRef(b.PreviousId, b.Number-1)
-}
-
 //func (b *Block) Payload() []byte {
 //	if b == nil {
 //		return nil
@@ -239,9 +233,24 @@ func (b *Block) ToProtocol() interface{} {
 		return b.memoized
 	}
 
-	obj, err := GetBlockDecoder.Decode(b)
+	obj, err := getBlockDecoder().Decode(b)
 	if err != nil {
-		panic(fmt.Errorf("unable to decode block kind %s version %d : %w", b.PayloadKind, b.PayloadVersion, err))
+		data, errData := b.Payload.Get()
+		if errData != nil {
+			// The data itself was probably not available!
+			panic(fmt.Errorf("unable to retrieve block %s payload (kind: %s, version: %d): %w", b.AsRef(), b.PayloadKind, b.PayloadVersion, err))
+		}
+
+		checksum := sha256.Sum256(data)
+
+		panic(fmt.Sprintf("unable to decode block %s payload (kind: %s, version: %d, size: %d, sha256: %s): %s\n\nPayload: %s",
+			b.AsRef(),
+			b.PayloadKind,
+			b.PayloadVersion,
+			len(data),
+			hex.EncodeToString(checksum[:]),
+			err,
+			hex.EncodeToString(data)))
 	}
 
 	if b.cloned {

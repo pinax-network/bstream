@@ -5,7 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Removed
+
+- **BREAKING** Removed `bstream.Block.PreviousRef` method as it was invalid since it was assuming that the previous number is always minus one the current block num which is not true on a lot of supported chains (Solana and NEAR for example).
+
 ### Added
+
 - Added metrics to expose blocks/bytes read/sent from sources
 - Added a metric to track blocks behind live on a joiningsource for a trace_id
 - Added FileSourceWithSecondaryBlocksStores Option to allow a fallback location

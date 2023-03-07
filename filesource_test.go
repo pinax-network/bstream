@@ -54,6 +54,71 @@ func base(in int) string {
 	return fmt.Sprintf("%010d", in)
 }
 
+func TestFileSource_Deadlock(t *testing.T) {
+	bs := dstore.NewMockStore(nil)
+	bs.SetFile(base(0), testBlocks(
+		1, "1a", "", 0,
+		2, "2a", "", 0,
+		3, "3a", "", 0,
+		4, "4a", "", 0,
+	))
+
+	lastProcessed := 0
+	handler := HandlerFunc(func(blk *Block, obj interface{}) error {
+		if blk.Number == 3 {
+			return errDone
+		}
+		lastProcessed = int(blk.Number)
+		return nil
+	})
+
+	fs := NewFileSource(bs, 1, handler, zlog)
+
+	testDone := make(chan struct{})
+	go func() {
+		fs.Run()
+		close(testDone)
+	}()
+	select {
+	case <-testDone:
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Test timeout")
+	}
+
+	assert.Equal(t, 2, lastProcessed)
+}
+
+func TestFileSource_Race(t *testing.T) {
+	bs := dstore.NewMockStore(nil)
+	bs.SetFile(base(0), testBlocks(
+		1, "1a", "", 0,
+		2, "2a", "", 0,
+		3, "3a", "", 0,
+		4, "4a", "", 0,
+	))
+
+	lastProcessed := 0
+	shutMeDown := make(chan interface{})
+	handler := HandlerFunc(func(blk *Block, obj interface{}) error {
+		if blk.Number == 3 {
+			close(shutMeDown)
+			time.Sleep(time.Millisecond * 50)
+		}
+		lastProcessed = int(blk.Number)
+		return nil
+	})
+
+	fs := NewFileSource(bs, 1, handler, zlog)
+
+	go func() {
+		<-shutMeDown
+		fs.Shutdown(nil)
+	}()
+
+	fs.Run()
+	assert.Equal(t, 3, lastProcessed, "race condition in filesource Run() when shutting down")
+}
+
 func TestFileSource_Run(t *testing.T) {
 	bs := dstore.NewMockStore(nil)
 	bs.SetFile(base(0), testBlocks(

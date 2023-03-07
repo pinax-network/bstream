@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/streamingfast/bstream"
@@ -19,8 +20,9 @@ type Stream struct {
 	startBlockNum int64
 	handler       bstream.Handler
 
-	cursor       *bstream.Cursor
-	stopBlockNum uint64
+	cursor         *bstream.Cursor
+	cursorIsTarget bool
+	stopBlockNum   uint64
 
 	preprocessFunc    bstream.PreprocessFunc
 	preprocessThreads int
@@ -92,6 +94,9 @@ func (s *Stream) Run(ctx context.Context) error {
 	source.Run()
 	if err := source.Err(); err != nil {
 		s.logger.Debug("source shutting down", zap.Error(err))
+		if errors.Is(err, bstream.ErrResolveCursor) {
+			return &ErrInvalidArg{message: err.Error()}
+		}
 		return err
 	}
 	return nil
@@ -141,6 +146,7 @@ func (s *Stream) createSource(ctx context.Context) (bstream.Source, error) {
 		ctx,
 		absoluteStartBlockNum,
 		s.cursor,
+		s.cursorIsTarget,
 		s.logger,
 	), nil
 
